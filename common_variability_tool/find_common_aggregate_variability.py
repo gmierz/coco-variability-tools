@@ -3,245 +3,32 @@ import argparse
 import json
 import time
 import copy
+from diff_two import *
 
+def common_removal_var_parser():
+	parser = argparse.ArgumentParser(description='Diff two runs and compare differences while ' +
+												 'taking common variability into account.')
+	parser.add_argument('--path-to-old', '-po', type=str, nargs=1,
+						help='The path that points to a GRCOV file from an `older` run that was either ' +
+							 'a part of the variability analyisis, or a different one altogether.')
+	parser.add_argument('--path-to-new', '-pn', type=str, nargs=1,
+						help='The path to the newer GRCOV file that will be compared with to determine ' +
+						'differences that are unique and not due to inherent variability.')
+	parser.add_argument('--variability-json', '-vj', type=str, nargs=1,
+						help='The path to the json that contains the variability data for this test suite' +
+						' and chunk.')
+	return parser
 
-parser = argparse.ArgumentParser(description='Diff two runs and compare differences while ' +
-											 'taking common variability into account.')
-parser.add_argument('--path-to-old', '-po', type=str, nargs=1,
-					help='The path that points to a GRCOV file from an `older` run that was either ' +
-						 'a part of the variability analyisis, or a different one altogether.')
-parser.add_argument('--path-to-new', '-pn', type=str, nargs=1,
-					help='The path to the newer GRCOV file that will be compared with to determine ' +
-					'differences that are unique and not due to inherent variability.')
-parser.add_argument('--variability-json', '-vj', type=str, nargs=1,
-					help='The path to the json that contains the variability data for this test suite' +
-					' and chunk.')
-
-def load_artifacts(old_link, new_link):
-	old_lines = []
-	f = open(old_link, 'r')
-	old_lines = f.readlines()
-
-	new_lines = []
-	f = open(new_link, 'r')
-	new_lines = f.readlines()
-
-	return (old_lines, new_lines)
-
-def check_testfiles(old_lines, new_lines):
-	print('Checking test file differences...')
-	differences = {
-		'in_old': [],
-		'in_new': []
-	}
-
-	tests_old = []
-	for i in range(0,len(old_lines)):
-		if old_lines[i].startswith('TN'):
-			tests_old.append(old_lines[i])
-
-	print('Checking new...')
-	tests_new = []
-	different = False
-	print(len(old_lines))
-	print(len(new_lines))
-	for i in range(0,len(new_lines)):
-		if new_lines[i].startswith('TN'):
-			tests_new.append(new_lines[i])
-			if new_lines[i] not in tests_old:
-				print('Big difference! Missing a test file in the old in comparison to new.')
-				print('Test file: ')
-				print(new_lines[i])
-				different = True
-				differences['in_new'].append(new_lines[i])
-
-	print('Checking old...')
-	for i in range(0, len(old_lines)):
-		if old_lines[i].startswith('TN') and (old_lines[i] not in tests_new):
-				print('Big difference! Missing a test file in the new in comparison to old.')
-				print('Test file: ')
-				print(old_lines[i])
-				different = True
-				differences['in_old'].append(old_lines[i])
-
-	print('Finished checking test file differences.')
-	return {
-		'different': different,
-		'differences': differences,
-		'old_tests': tests_old,
-		'new_tests': tests_new
-	}
-
-def check_sourcefiles(old_lines, new_lines):
-	print('Checking source file differences...')
-	differences = {
-		'in_old': [],
-		'in_new': []
-	}
-
-	sfs_old = []
-	multiples_old = False
-	for i in range(0,len(old_lines)):
-		if old_lines[i].startswith('SF'):
-			if old_lines[i] in sfs_old:
-				print('Multiple source file entries for:')
-				print(old_lines[i])
-				multiples_old = True
-			sfs_old.append(old_lines[i])
-
-	print('Checking new...')
-	sfs_new = []
-	different = False
-	multiples_new = False
-	print(len(old_lines))
-	print(len(new_lines))
-	for i in range(0,len(new_lines)):
-		if new_lines[i].startswith('SF'):
-			if new_lines[i] in sfs_new:
-				print('Multiple source file entries for:')
-				print(new_lines[i])
-				multiples_new = True
-			sfs_new.append(new_lines[i])
-			if new_lines[i] not in sfs_old:
-				print('Big difference! Missing a source file in the old in comparison to new.')
-				print('Source file: ')
-				print(new_lines[i])
-				different = True
-				differences['in_new'].append(new_lines[i])
-
-	print('Checking old...')
-	for i in range(0, len(old_lines)):
-		if old_lines[i].startswith('SF') and (old_lines[i] not in sfs_new):
-				print('Big difference! Missing a source file in the new in comparison to old.')
-				print('Source file: ')
-				print(old_lines[i])
-				different = True
-				differences['in_old'].append(old_lines[i])
-
-	print('Finished checking source file differences.')
-	return {
-		'all_sources_old': len(sfs_old),
-		'all_sources_new': len(sfs_new),
-		'different': different,
-		'differences': differences,
-		'different_multiples_old': multiples_old,
-		'different_multiples_new': multiples_new,
-		'new_sources': sfs_new, 
-		'old_sources': sfs_old,
-	}
-
-def diff(first, second):
-		second = set(second)
-		return [item for item in first if item not in second]
-
-def check_lines(old_lines, new_lines, sfs):
-	differences = {}
-	print('Checking lines...')
-	old_hit_lines = {}
-	new_hit_lines = {}
-	total_new_count = {}
-	total_old_count = {}
-	for i in range(0, len(sfs)):
-		old_hit_lines[sfs[i]] = []
-		new_hit_lines[sfs[i]] = []
-		total_new_count[sfs[i]] = 0
-		total_old_count[sfs[i]] = 0
-
-	print('Getting old lines...')
-	current_sf = ''
-	for i in range(0, len(old_lines)):
-		if old_lines[i].startswith('SF'):
-			current_sf = old_lines[i]
-		if old_lines[i].startswith('DA'):
-			line, line_count = old_lines[i].replace('DA:', '').split(',')
-			# If we hit the line at least once
-			if int(line_count) > 0:
-				old_hit_lines[current_sf].append(int(line))
-			# Increase total number of lines found in this file
-			total_old_count[current_sf] += 1
-
-	print('Getting new lines...')
-	current_sf = ''
-	for i in range(0, len(new_lines)):
-		if new_lines[i].startswith('SF'):
-			current_sf = new_lines[i]
-		if new_lines[i].startswith('DA'):
-			line, line_count = new_lines[i].replace('DA:', '').split(',')
-			if int(line_count) > 0:
-				new_hit_lines[current_sf].append(int(line))
-			# Increase total number of lines found in this file
-			total_new_count[current_sf] += 1
-
-	print('Comparing lines...')
-	for sf in new_hit_lines:
-		if len(new_hit_lines[sf]) == len(old_hit_lines[sf]):
-			diff1 = diff(old_hit_lines, new_hit_lines)
-			diff2 = diff(new_hit_lines, old_hit_lines)
-			if len(diff1) != 0 or len(diff2) != 0:
-				print('Error, new and old lines for the source file:')
-				print(sf)
-				print('are not the same. Differences:')
-				print('In old but not in new:')
-				print(diff1)
-				print('In new but not in old:')
-				print(diff2)
-
-				differences[sf] = {
-					'in_old': diff1,
-					'in_new': diff2,
-					'total_old': total_old_count[sf],
-					'total_new': total_new_count[sf]
-				}
-		else:
-			diff1 = diff(old_hit_lines[sf], new_hit_lines[sf])
-			diff2 = diff(new_hit_lines[sf], old_hit_lines[sf])
-			print('Error, new and old lines for the source file:')
-			print(sf)
-			print('are not the same. Differences:')
-			print('In old but not in new:')
-			print(diff1)
-			print('In new but not in old:')
-			print(diff2)
-
-			differences[sf] = {
-					'in_old': diff1,
-					'in_new': diff2,
-					'total_old': total_old_count[sf],
-					'total_new': total_new_count[sf]
-			}
-
-	return differences
-
-def format_sfnames(differences):
-	new_differences = {}
-	for sf in differences:
-		new_sf = sf.replace('SF:', '', 1)
-		new_sf = new_sf.replace('\n', '')
-		new_differences[new_sf] = differences[sf]
-	return new_differences
-
-def save_single_json(data, name):
-	epoch_time = str(int(time.time()))
-	with open(name + '_' + epoch_time + '.json', 'w+') as fp:
-		json.dump(data, fp, sort_keys=True, indent=4)
-
-def save_json(differences, tests_dict, sfs_dict):
-	epoch_time = str(int(time.time()))
-	with open('data_line' + epoch_time + '.json', 'w+') as fp:
-		json.dump(differences, fp, sort_keys=True, indent=4)
-
-	with open('data_sources' + epoch_time + '.json', 'w+') as fp:
-		json.dump(sfs_dict, fp, sort_keys=True, indent=4)
-
-	with open('data_tests' + epoch_time + '.json', 'w+') as fp:
-		json.dump(tests_dict, fp, sort_keys=True, indent=4)
 
 def filter_commons(differences, common_var_file):
+	# Annotate the differences with whether or not
+	# they are variable.
+
 	# Load common vars file
 	with open(common_var_file) as jsonf:
 		common_data = json.load(jsonf)
 
-	# Now we have all the differences, filter
+	# We have all the differences, filter
 	# out the lines in the files which have common variability.
 	# If they are now empty, leave a trace so we can tell.
 
@@ -290,7 +77,7 @@ def filter_commons(differences, common_var_file):
 
 			# Now, we have a list of lines that were different between the two
 			# and they are annotated with information on whether or not the
-			# lines that are commonly variable. Save these to process them
+			# lines are commonly variable. Save these to process them
 			# again later.
 
 		# Or leave it as a new difference
@@ -412,26 +199,16 @@ def split_var_and_nonvar(differences, old_differences):
 	}
 	return data_dict
 
-
-def get_diff(old_link, new_link, common_var_file):
-	(old_lines, new_lines) = load_artifacts(old_link, new_link)
-	tests_dict = check_testfiles(old_lines, new_lines)
-	sfiles_dict = check_sourcefiles(old_lines, new_lines)
-	differences = check_lines(old_lines, new_lines, sfiles_dict['new_sources'])
-	differences1 = format_sfnames(differences)
-	save_json(differences1, tests_dict, sfiles_dict)
-	differences = filter_commons(differences1, common_var_file)
-	diffs = split_var_and_nonvar(differences, differences1)
-	save_single_json(diffs, 'test_diffs')
-	return differences
-
 if __name__ == '__main__':
+	parser = common_removal_var_parser()
 	args = parser.parse_args()
 
+	# Default values if none were given
 	old_link = 'C:\\Users\\Gregory\\Documents\\mozwork\\grcov_data\\bc2_50times\\test_removal\\grcov_lcov_output_stdout0.info'
 	new_link = 'C:\\Users\\Gregory\\Documents\\mozwork\\grcov_data\\bc2_50times\\test_removal\\grcov_lcov_output_stdout_m_oneTest.info'
 	common_var_file = 'C:\\Users\\Gregory\\Documents\\mozwork\\grcov_data\\common_var_data.json'
 
+	# If ones given, all need to be given
 	if args.variability_json is not None:
 		# Set the values to what the user wants.
 		print('Setting user specific files...')
