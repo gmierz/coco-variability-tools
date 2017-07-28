@@ -1,6 +1,7 @@
 import json
 import time
 import copy
+import os
 
 
 def load_artifacts(old_link, new_link):
@@ -233,8 +234,8 @@ def check_lines(old_lines, new_lines, sfs):
 			if len(new_hit_lines[sf]) == len(old_hit_lines[sf]):
 
 				# Get the diff
-				diff1 = diff(old_hit_lines, new_hit_lines)
-				diff2 = diff(new_hit_lines, old_hit_lines)
+				diff1 = diff(old_hit_lines[sf], new_hit_lines[sf])
+				diff2 = diff(new_hit_lines[sf], old_hit_lines[sf])
 
 				# If either of them are empty, there are differences
 				if len(diff1) != 0 or len(diff2) != 0:
@@ -290,8 +291,9 @@ def check_lines(old_lines, new_lines, sfs):
 	# Get the differences for the source files that are
 	# in the old file but not the new one.
 	for sf in old_hit_lines:
-		if sf not in differences:
+		if sf not in differences and sf not in new_hit_lines:
 			# Store all the lines of the old file
+			print('here now now ')
 			differences[sf] = {
 						'in_old': old_hit_lines[sf],
 						'in_new': [],
@@ -312,47 +314,47 @@ def format_sfnames(differences):
 	return new_differences
 
 
-def save_single_json(data, name):
+def save_single_json(data, name, output_dir=''):
 	# Save a single json
 	epoch_time = str(int(time.time()))
-	with open(name + '_' + epoch_time + '.json', 'w+') as fp:
+	with open(os.path.join(output_dir, name + '_' + epoch_time + '.json'), 'w+') as fp:
 		json.dump(data, fp, sort_keys=True, indent=4)
 
 
-def save_json(differences, tests_dict, sfs_dict):
+def save_json(differences, tests_dict, sfs_dict, name='', output_dir=''):
 	# Save the differences
 	epoch_time = str(int(time.time()))
-	with open('data_line' + epoch_time + '.json', 'w+') as fp:
+	with open(os.path.join(output_dir, name + '_data_line' + epoch_time + '.json'), 'w+') as fp:
 		json.dump(differences, fp, sort_keys=True, indent=4)
 
-	with open('data_sources' + epoch_time + '.json', 'w+') as fp:
+	with open(os.path.join(output_dir, name + '_data_sources' + epoch_time + '.json'), 'w+') as fp:
 		json.dump(sfs_dict, fp, sort_keys=True, indent=4)
 
-	with open('data_tests' + epoch_time + '.json', 'w+') as fp:
+	with open(os.path.join(output_dir, name + '_data_tests' + epoch_time + '.json'), 'w+') as fp:
 		json.dump(tests_dict, fp, sort_keys=True, indent=4)
 
 
 # Runs through everything
-def get_diff(old_link, new_link, common_var_file):
+def get_diff(old_link, new_link, name='', output_dir='', save_the_data=True):
+	print ('name: ' + name)
 	# Load the artifacts
 	(old_lines, new_lines) = load_artifacts(old_link, new_link)
 
 	# Check tests
+	print ('name: ' + name)
 	tests_dict = check_testfiles(old_lines, new_lines)
 	# Check sources
+	print ('name: ' + name)
 	sfiles_dict = check_sourcefiles(old_lines, new_lines)
 	# Check line differences
+	print ('name: ' + name)
 	differences = check_lines(old_lines, new_lines, sfiles_dict['new_sources'])
 
 	# Reformat the source file names
 	differences1 = format_sfnames(differences)
+	print ('name: ' + name)
 	# Save the differences
-	save_json(differences1, tests_dict, sfiles_dict)
+	if save_the_data:
+		save_json(differences1, tests_dict, sfiles_dict, name=name, output_dir=output_dir)
 
-	# Annotate commmonly variable lines
-	differences = filter_commons(differences1, common_var_file)
-	# Split the annotated differences and save the data
-	diffs = split_var_and_nonvar(differences, differences1)
-	save_single_json(diffs, 'test_diffs')
-
-	return differences
+	return (differences, sfiles_dict, tests_dict)

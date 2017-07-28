@@ -23,15 +23,15 @@ except ImportError:
 # The suite should include the flavor. It makes no sense to aggregate the data from
 # multiple flavors together because they don't run the same tests. This is also
 # why you cannot specify more than one suite and chunk.
-def  artifact_downloader_parser():
-	parser = argparse.ArgumentParser("This tool can download the GRCOV data from a list of " +
-									 "treeherder links. It then extracts the data, suffixes it with " +
+def artifact_downloader_parser():
+	parser = argparse.ArgumentParser("This tool can download the GRCOV data from a group of linux64-ccov " +
+									 "taskcluster tasks. It then extracts the data, suffixes it with " +
 									 "a number and then stores it in an output directory.")
 	parser.add_argument('--task-group-id', type=str, nargs=1,
 						help='The group of tasks that should be parsed to find all the necessary ' +
 						'data to be used in this analysis. ')
 	parser.add_argument('--test-suites-list', type=str, nargs='+',
-						help='The lsit of tests to look at. e.g. mochitest-browser-chrome-e10s-2.' +
+						help='The listt of tests to look at. e.g. mochitest-browser-chrome-e10s-2.' +
 						' If it`s empty we assume that it means nothing, if `all` is given all suites' +
 						' will be processed.')
 	parser.add_argument('--output', type=str, nargs=1,
@@ -97,24 +97,18 @@ def unzip_grcov(abs_zip_path, output_dir, count=0):
 			return a_path
 		z.extractall(tmp_path if os.path.exists(tmp_path)\
 							  else make_count_dir(tmp_path))
+
 	grcov_file_path = ''
 	new_file_path = ''
 	for dirpath, dirnames, filenames in os.walk(tmp_path):
 		for filename in filenames:
 			grcov_file_path = os.path.join(dirpath, filename)
 			new_file_path = os.path.join(output_dir, 'grcov_lcov_output_stdout' + str(count) + '.info')
-	print(grcov_file_path)
-	print(new_file_path)
+
 	shutil.copyfile(grcov_file_path, new_file_path)
 
-
-def main():
-	parser = artifact_downloader_parser()
-	args = parser.parse_args()
-
-	task_group_id = args.task_group_id[0]
-	test_suites = args.test_suites_list
-	output_dir = args.output[0] if args.output is not None else os.getcwd()
+def artifact_downloader(task_group_id, output_dir=os.getcwd(), test_suites=[]):
+	head_rev = ''
 	all_tasks = False
 	if 'all' in test_suites:
 		all_tasks = True
@@ -162,6 +156,7 @@ def main():
 
 		if all_tasks or download_this_task:
 			# Make directories for this task
+			head_rev = task['task']['payload']['env']['GECKO_HEAD_REV']
 			grcov_dir = os.path.join(output_dir, test_name)
 			downloads_dir = os.path.join(os.path.join(grcov_dir, 'downloads'))
 			data_dir = os.path.join(os.path.join(grcov_dir, 'grcov_data'))
@@ -182,7 +177,21 @@ def main():
 					unzip_grcov(filen, data_dir, task_counters[test_name])
 					break
 	print('done')
+	# Return the directory where all the tasks were downloaded to
+	# and split into folders.
+	return output_dir, head_rev
 
+def main():
+	parser = artifact_downloader_parser()
+	args = parser.parse_args()
+
+	task_group_id = args.task_group_id[0]
+	test_suites = args.test_suites_list
+	output_dir = args.output[0] if args.output is not None else os.getcwd()
+
+	task_dir = artifact_downloader(task_group_id, output_dir=output_dir, test_suites=test_suites)
+
+	return task_dir
 
 if __name__ == '__main__':
 	main()
