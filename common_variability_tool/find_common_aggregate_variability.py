@@ -199,6 +199,18 @@ def split_var_and_nonvar(differences, old_differences):
 	}
 	return data_dict
 
+def get_diff_with_common(old_link, new_link, common_var_file):
+	(old_lines, new_lines) = load_artifacts(old_link, new_link)
+	tests_dict = check_testfiles(old_lines, new_lines)
+	sfiles_dict = check_sourcefiles(old_lines, new_lines)
+	differences = check_lines(old_lines, new_lines, sfiles_dict['new_sources'])
+	differences1 = format_sfnames(differences)
+	save_json(differences1, tests_dict, sfiles_dict)
+	differences = filter_commons(differences1, common_var_file)
+	diffs = split_var_and_nonvar(differences, differences1)
+	save_single_json(diffs, 'test_diffs')
+	return differences
+
 if __name__ == '__main__':
 	parser = common_removal_var_parser()
 	args = parser.parse_args()
@@ -216,4 +228,4 @@ if __name__ == '__main__':
 		old_link = args.path_to_old[0]
 		new_link = args.path_to_new[0]
 
-	diffs = get_diff(old_link, new_link, common_var_file)
+	diffs = get_diff_with_common(old_link, new_link, common_var_file)

@@ -107,7 +107,7 @@ def unzip_grcov(abs_zip_path, output_dir, count=0):
 
 	shutil.copyfile(grcov_file_path, new_file_path)
 
-def artifact_downloader(task_group_id, output_dir=os.getcwd(), test_suites=[]):
+def artifact_downloader(task_group_id, output_dir=os.getcwd(), test_suites=[], download_failures=False):
 	head_rev = ''
 	all_tasks = False
 	if 'all' in test_suites:
@@ -170,6 +170,16 @@ def artifact_downloader(task_group_id, output_dir=os.getcwd(), test_suites=[]):
 				task_counters[test_name] += 1
 			task_id = task['status']['taskId']
 			artifacts = get_task_artifacts(task_id)
+
+			failed = None
+			for artifact in artifacts:
+				if 'log_error' in artifact['name']:
+					filen = download_artifact(task_id, artifact, downloads_dir)
+					if os.stat(filen).st_size == 0:
+						failed = artifact['name']
+			if (failed is not None) and (not download_fails):
+				print('Skipping a failed test: ' + failed)
+				continue
 
 			for artifact in artifacts:
 				if 'grcov' in artifact['name']:

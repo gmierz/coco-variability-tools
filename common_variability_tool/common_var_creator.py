@@ -52,8 +52,6 @@ def common_var_creator(task_group_id, test_suites_list=[], output_dir=os.getcwd(
 				f.write(hfile)
 
 
-
-
 def main():
 	parser = common_var_creator_parser()
 	args = parser.parse_args()
