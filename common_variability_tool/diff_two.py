@@ -6,15 +6,56 @@ import os
 
 def load_artifacts(old_link, new_link):
 	# Load the old and the new artifacts for proceseing.
-	old_lines = []
-	f = open(old_link, 'r')
-	old_lines = f.readlines()
+	try:	
+		old_lines = []
+		f = open(old_link, 'r')
+		old_lines = f.readlines()
 
-	new_lines = []
-	f = open(new_link, 'r')
-	new_lines = f.readlines()
+		new_lines = []
+		f = open(new_link, 'r')
+		new_lines = f.readlines()
+	except FileNotFoundError:
+		return (None, None)
 
 	return (old_lines, new_lines)
+
+
+def load_artifact(file_path):
+	try:
+		lines = []
+		with open(file_path, 'r') as f:
+			lines = f.readlines()
+		return lines
+	except FileNotFoundError:
+		return None
+
+
+def load_json(file_path):
+	with open(file_path) as jsonf:
+		common_data = json.load(jsonf)
+	return common_data
+
+
+# Return a JSON of the file lines for
+# easier comparison.
+def get_file_json(file_name):
+	current_sf = ''
+	file_lines = load_artifact(file_name)
+	new_hit_lines = {}
+	for i in range(0, len(file_lines)):
+		if file_lines[i].startswith('SF'):
+			# Set the current source file to gather lines for
+			current_sf = file_lines[i]
+		if file_lines[i].startswith('DA'):
+			# Get the line number
+			line, line_count = file_lines[i].replace('DA:', '').split(',')
+			if int(line_count) > 0:
+				if current_sf not in new_hit_lines:
+					new_hit_lines[current_sf] = []
+				new_hit_lines[current_sf].append(int(line))
+
+	return format_sfnames(new_hit_lines)
+
 
 def check_testfiles(old_lines, new_lines):
 	# Check if there are any differences in the test files.
@@ -339,6 +380,8 @@ def get_diff(old_link, new_link, name='', output_dir='', save_the_data=True):
 	print ('name: ' + name)
 	# Load the artifacts
 	(old_lines, new_lines) = load_artifacts(old_link, new_link)
+	if old_lines is None and new_lines is None:
+		return (None, None, None)
 
 	# Check tests
 	print ('name: ' + name)

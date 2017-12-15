@@ -175,9 +175,9 @@ def artifact_downloader(task_group_id, output_dir=os.getcwd(), test_suites=[], d
 			for artifact in artifacts:
 				if 'log_error' in artifact['name']:
 					filen = download_artifact(task_id, artifact, downloads_dir)
-					if os.stat(filen).st_size == 0:
+					if os.stat(filen).st_size != 0:
 						failed = artifact['name']
-			if (failed is not None) and (not download_fails):
+			if (failed is not None) and (not download_failures):
 				print('Skipping a failed test: ' + failed)
 				continue
 
@@ -199,7 +199,7 @@ def main():
 	test_suites = args.test_suites_list
 	output_dir = args.output[0] if args.output is not None else os.getcwd()
 
-	task_dir = artifact_downloader(task_group_id, output_dir=output_dir, test_suites=test_suites)
+	task_dir, head_rev = artifact_downloader(task_group_id, output_dir=output_dir, test_suites=test_suites)
 
 	return task_dir
 

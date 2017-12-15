@@ -1,6 +1,7 @@
 from artifact_downloader import artifact_downloader
-from common_var_retriever import get_common_var_file
+from common_var_retriever import get_common_var_file, get_common_file
 from common_var_html_creator import get_html
+from diff_two import save_single_json
 
 import argparse
 import os
@@ -24,6 +25,8 @@ def common_var_creator_parser():
 						' number of grcov files found.')
 	parser.add_argument('--html-out', action='store_true',
 						help='Outputs an html view of the variability.')
+	parser.add_argument('--get-commons', action='store_true',
+						help='Returns the merge of all code coverage in all files.')
 	return parser
 
 
@@ -52,6 +55,27 @@ def common_var_creator(task_group_id, test_suites_list=[], output_dir=os.getcwd(
 				f.write(hfile)
 
 
+def common_creator(task_group_id, test_suites_list=[], output_dir=os.getcwd(), exclude=[], save_the_data=True, html_out=True):
+	# Download artifacts
+	print('Getting common lines')
+	task_dir, head_rev = artifact_downloader(task_group_id, output_dir=output_dir, test_suites=test_suites_list)
+	#task_dir = """C:\\Users\\Gregory\\Documents\\mozwork\\devtools_analysis\\MLq5-3ejTSu7RyAi1zx6ug\\5"""
+	# In the task dir, there will be one
+	# directory per test suite chunk.
+	dirnames = [dirname for dirname in os.listdir(task_dir) if os.path.isdir(os.path.join(task_dir, dirname))]
+
+	# For each test suite chunk
+	for test_suite_chunk_name in dirnames:
+		path_to_chunk = os.path.join(task_dir, test_suite_chunk_name)
+
+		# Within the 'grcov_data' directory, we can find all the grcov files
+		# at the top level.
+		grcov_data_dir = os.path.join(path_to_chunk, 'grcov_data')
+		common_var_procd = get_common_file(grcov_data_dir, exclude, output_dir=grcov_data_dir, save_the_data=save_the_data)
+
+		save_single_json(common_var_procd, 'commons_for_' + test_suite_chunk_name, output_dir=output_dir)
+
+
 def main():
 	parser = common_var_creator_parser()
 	args = parser.parse_args()
@@ -72,9 +96,14 @@ def main():
 		output_all = args.output_all[0]
 
 	print(task_group_id)
-	common_var_creator(task_group_id, test_suites_list=test_suites_list, \
-					   output_dir=output_all, save_the_data=True, \
-					   html_out=args.html_out)
+	if args.get_commons:
+		common_creator(task_group_id, test_suites_list=test_suites_list, \
+						   output_dir=output_all, save_the_data=True, \
+						   html_out=args.html_out)
+	else:
+		common_var_creator(task_group_id, test_suites_list=test_suites_list, \
+						   output_dir=output_all, save_the_data=True, \
+						   html_out=args.html_out)
 
 
 if __name__ == '__main__':

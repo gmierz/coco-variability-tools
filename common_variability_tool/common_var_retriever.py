@@ -1,4 +1,4 @@
-from diff_two import get_diff, save_single_json, format_sfnames
+from diff_two import get_diff, save_single_json, format_sfnames, load_artifact, get_file_json
 import os
 import time
 import csv
@@ -186,6 +186,9 @@ def get_common_var_file(starter_dir, exclude, output_dir='', number=0, save_the_
 			# Get the difference
 			all_differences[name]['differences'], all_differences[name]['sfiles_dict'], all_differences[name]['tests_dict'] = \
 				get_diff(curr_path, diff_path, name=name, output_dir=output_dir, save_the_data=save_the_data)
+			if all_differences[name]['sfiles_dict'] is None:
+				# Bad dataset, go to the next one
+				continue
 			# Merge the differences into common variability
 			print(name)
 			differences = merge_commons_diffs(all_differences[name]['differences'], differences, name=name, output_dir=output_dir, \
@@ -207,6 +210,46 @@ def get_common_var_file(starter_dir, exclude, output_dir='', number=0, save_the_
 
 	return meta_differences
 
+
+def get_common_file(starter_dir, exclude, output_dir='', number=0, save_the_data=False):
+	print('save the data: ' + str(save_the_data))
+	if number == 0:
+		files = [f for f in os.listdir(starter_dir) if os.path.isfile(os.path.join(starter_dir, f))]
+		for file in files:
+			if 'grcov_lcov_output_stdout' in file:
+				number += 1
+		if number < 3:
+			print('Error, couldn`t find any/enough data files in the directory (needs at least 2): ' + starter_dir)
+			return None
+
+	common_lines = {}
+	first = True
+	for i in range(0, number-1):
+		if i not in exclude:
+			curr_path = os.path.join(starter_dir, 'grcov_lcov_output_stdout' + str(i) + '.info')
+			if not os.path.exists(curr_path):
+				continue
+
+			file_json = get_file_json(curr_path)
+
+			if first:
+				common_lines = file_json
+				continue
+
+			for sf in file_json:
+				if sf not in common_lines:
+					common_lines[sf] = file_json[sf]
+				else:
+					file_lines = file_json[sf]
+					for line_num in file_lines:
+						if line_num not in common_lines[sf]:
+							common_lines[sf].append(line_num)
+
+	for sf in common_lines:
+		common_lines[sf].sort()
+
+	return format_sfnames(common_lines)
+			
 
 def main():
 	# Start with a directory containing all the GRCOV data from multiple runs of the same test suite

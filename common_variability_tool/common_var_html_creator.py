@@ -33,6 +33,9 @@ def get_file_info_commonvar(common_var_diff, rev=None, file=''):
 	print(all_var_lines_counts)
 	sorted_var_lines = sorted(all_var_lines_counts, key=itemgetter(1))
 	print(sorted_var_lines)
+	if not sorted_var_lines:
+		return """ """
+
 	sorted_counts, sorted_lines = map(list,zip(*sorted_var_lines))
 
 	total_compares = common_var_diff['meta-data']['total_number_processed']
@@ -110,14 +113,97 @@ def get_file_info_commonvar(common_var_diff, rev=None, file=''):
 	</div>
 	"""
 
+# Accepts a simple JSON with source file keys
+# and lines as the entries.
+def get_file_info_simple(commons, rev=None, file=''):
+	# Get the information about file, sort the lines and display.
+	commons[file].sort()
+	sorted_lines = commons[file]
+	print(sorted_lines)
+	if not sorted_lines:
+		return """ """
+
+	url = "https://hg.mozilla.org/try/complete-file/" + rev + "/" + file
+
+	try:
+		print(url)
+		content = urllib2.urlopen(url).read()
+		soup = BeautifulSoup(content, "html.parser")
+		lines = (soup.findAll("pre", class_="sourcelines stripes"))
+
+		# Get the lines
+		lines_text = []
+		for el in lines:
+			for line in el.findAll(text=True):
+				lines_text.append(str(line))
+
+		# Reformat the lines.
+		count = 0
+		curr_line = ''
+		formatted_lines = []
+		for line in lines_text:
+			if count == 0 and line == '\n':
+				count = count + 1
+				continue
+			elif line == '\n':
+				formatted_lines.append(curr_line)
+				curr_line = ''
+			else:
+				curr_line += line
+			count = count + 1
+		if curr_line != '':
+			formatted_lines.append(curr_line)
+
+		styled_lines = ''
+		for i in range(0, len(sorted_lines)):
+			line = sorted_lines[i]
+			line_content = formatted_lines[int(line)-1]
+			styled_lines += """
+				<tr>
+					<td> """ + str(line) + """ </td>
+					<td> """ + str(line_content) + """ </td>
+				</tr>
+			"""
+	except urllib.error.HTTPError:
+		print("Couldn't find this file in hg.")
+		styled_lines = """
+			<tr>
+				<td colspan="3"> Error: Couldn't find the file in hg. </td>
+			</tr>
+		"""
+
+	# Return an html blob for this file.
+	return """
+	<div>
+		<table border="1"> 
+			<tr>
+				<td colspan="2"> 
+					<div> 
+						<table>
+							<tr> <td> """ + file + """ </td> </tr>
+							<tr> <td> <a href=" """ + url + """ ">Hg Link</a> </td> </tr>
+						</table>
+					</div>
+				</td>
+				<td> Times Different </td>
+			</tr>
+		""" + styled_lines + """
+		</table>
+	</div>
+	"""
+
 
 def get_html(common_vars, rev=None):
 	file_infos = ''
 	# Format names just incase
-	common_vars['differences'] = format_sfnames(common_vars['differences'])
-	for file in common_vars['differences']:
-		file_infos += get_file_info_commonvar(common_vars, rev=rev, file=file)
-
+	if 'differences' in common_vars:
+		common_vars['differences'] = format_sfnames(common_vars['differences'])
+		for file in common_vars['differences']:
+			file_infos += get_file_info_commonvar(common_vars, rev=rev, file=file)
+	else:
+		# We have a simple display to do
+		for file in common_vars:
+			file_infos += get_file_info_simple(common_vars, rev=rev, file=file)
 	return """
 	<!DOCTYPE html>
 	<html>
